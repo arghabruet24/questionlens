@@ -11,21 +11,21 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-
+ 
 st.set_page_config(
     page_title="QuestionLens // Exam Analyzer",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
+ 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
-
+ 
 html, body, [class*="css"] { font-family: 'Rajdhani', sans-serif; }
 .stApp { background: #060608; color: #e0ffe0; }
-
+ 
 section[data-testid="stSidebar"] {
     background: #08090d !important;
     border-right: 1px solid #00ff8820;
@@ -39,7 +39,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     font-family: 'Share Tech Mono', monospace !important;
     font-size: 0.8rem !important;
 }
-
+ 
 .main-title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 5rem;
@@ -57,7 +57,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     text-transform: uppercase;
 }
 .accent { color: #00ff88; }
-
+ 
 .stat-card {
     background: #0a0f0a;
     border: 1px solid #00ff8830;
@@ -80,7 +80,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     text-transform: uppercase;
     letter-spacing: 0.12em;
 }
-
+ 
 .topic-header {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.3rem;
@@ -93,7 +93,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     letter-spacing: 0.08em;
     text-shadow: 0 0 10px #00ff8840;
 }
-
+ 
 .question-row {
     background: #080d08;
     border: 1px solid #00ff8815;
@@ -109,7 +109,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     margin-bottom: 0.4rem;
     font-weight: 500;
 }
-
+ 
 .badge {
     display: inline-block;
     padding: 1px 8px;
@@ -124,7 +124,7 @@ section[data-testid="stSidebar"] .stTextInput input {
 .badge-low { background: #00100a; color: #00cc88; border: 1px solid #00cc8830; }
 .badge-count { background: #1a0a00; color: #ff8800; border: 1px solid #ff880050; }
 .badge-year { background: #0a0a0a; color: #667766; border: 1px solid #33443330; }
-
+ 
 .hot-card {
     background: #080d08;
     border: 1px solid #00ff4430;
@@ -153,7 +153,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     font-weight: 500;
 }
 .hot-meta { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: #336633; }
-
+ 
 .section-title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.8rem;
@@ -163,7 +163,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     border-bottom: 1px solid #00ff8820;
     padding-bottom: 0.4rem;
 }
-
+ 
 .upload-hint {
     font-family: 'Share Tech Mono', monospace;
     font-size: 0.72rem;
@@ -171,7 +171,7 @@ section[data-testid="stSidebar"] .stTextInput input {
     margin-top: 0.4rem;
     letter-spacing: 0.05em;
 }
-
+ 
 div[data-testid="stButton"] button {
     background: #001a00 !important;
     color: #00ff88 !important;
@@ -218,16 +218,16 @@ div[data-testid="stDownloadButton"] button {
 hr { border-color: #00ff8815 !important; }
 </style>
 """, unsafe_allow_html=True)
-
+ 
 SYSTEM_PROMPT = """You are an expert academic question analyzer.
-
+ 
 Analyze previous year exam questions from provided text.
-
+ 
 Step 1: Extract all questions. Normalize wording. Ignore question numbers and marks.
 Step 2: Identify repetitions. Group similar questions. Record how many times each appeared and which years.
 Step 3: Organize by topic. Classify each question into a relevant subject topic.
 Step 4: Return ONLY this JSON structure with no extra text:
-
+ 
 {
   "summary": {
     "total_questions_extracted": 0,
@@ -257,31 +257,34 @@ Step 4: Return ONLY this JSON structure with no extra text:
     }
   ]
 }
-
+ 
 Priority: High = 3+ times, Medium = 2 times, Low = 1 time.
 most_repeated = top 10 by repeat_count descending.
 Return ONLY valid JSON. No preamble, no markdown backticks."""
-
-
+ 
+ 
 def call_openrouter(api_key, model, messages, timeout=90):
-    resp = httpx.post(
+    import urllib.request
+    import json as _json
+    payload = _json.dumps({"model": model, "messages": messages}).encode("utf-8")
+    req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
+        data=payload,
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://questionlens.app",
+            "HTTP-Referer": "https://questionlens.streamlit.app",
             "X-Title": "QuestionLens"
         },
-        json={"model": model, "messages": messages},
-        timeout=timeout
+        method="POST"
     )
-    resp.raise_for_status()
-    result = resp.json()
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        result = _json.loads(response.read().decode("utf-8"))
     if "choices" not in result:
         raise Exception(f"API Error: {result}")
     return result["choices"][0]["message"]["content"]
-
-
+ 
+ 
 def extract_text_from_pdf(file_bytes):
     text = ""
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
@@ -290,8 +293,8 @@ def extract_text_from_pdf(file_bytes):
             if page_text:
                 text += f"\n--- Page {i+1} ---\n{page_text}"
     return text
-
-
+ 
+ 
 def extract_text_from_image(file_bytes, mime_type, api_key):
     b64 = base64.b64encode(file_bytes).decode("utf-8")
     return call_openrouter(
@@ -305,8 +308,8 @@ def extract_text_from_image(file_bytes, mime_type, api_key):
             ]
         }]
     )
-
-
+ 
+ 
 def analyze_questions(all_text, api_key):
     raw = call_openrouter(
         api_key,
@@ -318,14 +321,14 @@ def analyze_questions(all_text, api_key):
     )
     raw = raw.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(raw)
-
-
+ 
+ 
 def generate_pdf_report(data, subject_name=""):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
         rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
-
+ 
     title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=22,
         textColor=colors.HexColor('#1a1a2e'), spaceAfter=6,
         fontName='Helvetica-Bold', alignment=TA_CENTER)
@@ -341,7 +344,7 @@ def generate_pdf_report(data, subject_name=""):
         textColor=colors.HexColor('#333344'), spaceAfter=4, leftIndent=12, leading=14)
     meta_style = ParagraphStyle('M', parent=styles['Normal'], fontSize=8,
         textColor=colors.HexColor('#888899'), spaceAfter=8, leftIndent=12)
-
+ 
     story = []
     story.append(Spacer(1, 0.5*cm))
     title_text = f"QuestionLens Report: {subject_name}" if subject_name else "QuestionLens Analysis Report"
@@ -349,7 +352,7 @@ def generate_pdf_report(data, subject_name=""):
     story.append(Paragraph(f"Generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e0e0f0')))
     story.append(Spacer(1, 0.5*cm))
-
+ 
     summary = data.get("summary", {})
     summary_data = [
         ["Total Questions", "Unique Questions", "Repeated Questions", "Topics Found"],
@@ -372,7 +375,7 @@ def generate_pdf_report(data, subject_name=""):
     ]))
     story.append(t)
     story.append(Spacer(1, 0.8*cm))
-
+ 
     most_repeated = data.get("most_repeated", [])
     if most_repeated:
         story.append(Paragraph("Most Repeated Questions", section_style))
@@ -399,7 +402,7 @@ def generate_pdf_report(data, subject_name=""):
             ]))
             story.append(qt)
             story.append(Spacer(1, 0.15*cm))
-
+ 
     story.append(Spacer(1, 0.5*cm))
     topics = data.get("topics", [])
     if topics:
@@ -414,25 +417,25 @@ def generate_pdf_report(data, subject_name=""):
                 story.append(Paragraph(
                     f"Priority: {q.get('priority','Low')}  |  Repeated: {q.get('repeat_count',1)}x  |  Years: {', '.join(years) if years else 'N/A'}",
                     meta_style))
-
+ 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
-
+ 
+ 
 def priority_badge(priority):
     cls = {"High": "badge-high", "Medium": "badge-medium", "Low": "badge-low"}.get(priority, "badge-low")
     return f'<span class="badge {cls}">{priority}</span>'
-
-
+ 
+ 
 def main():
     with st.sidebar:
         st.markdown('<p style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:#00ff88;letter-spacing:0.1em;text-shadow:0 0 15px #00ff8860;margin-bottom:0;">QUESTIONLENS</p>', unsafe_allow_html=True)
         st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.65rem;color:#336633;margin-top:-0.5rem;letter-spacing:0.15em;">// EXAM INTELLIGENCE SYSTEM</p>', unsafe_allow_html=True)
         st.markdown("---")
-
+ 
         st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.65rem;color:#00aa55;letter-spacing:0.15em;">[ API_CONFIG ]</p>', unsafe_allow_html=True)
-
+ 
         if "api_key" not in st.session_state:
             st.session_state.api_key = ""
         api_key = st.text_input(
@@ -443,15 +446,15 @@ def main():
             help="Get your free key from openrouter.ai"
         )
         st.session_state.api_key = api_key
-
+ 
         if api_key:
             st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.7rem;color:#00ff88;letter-spacing:0.08em;">▶ KEY_AUTHENTICATED</p>', unsafe_allow_html=True)
         else:
             st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.65rem;color:#ff4400;letter-spacing:0.06em;">! GET FREE KEY: openrouter.ai</p>', unsafe_allow_html=True)
-
+ 
         st.markdown("---")
         st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.65rem;color:#00aa55;letter-spacing:0.15em;">[ SUBJECT_TAG ]</p>', unsafe_allow_html=True)
-
+ 
         if "subject_name" not in st.session_state:
             st.session_state.subject_name = ""
         subject_name = st.text_input(
@@ -460,35 +463,35 @@ def main():
             value=st.session_state.subject_name
         )
         st.session_state.subject_name = subject_name
-
+ 
         st.markdown("---")
         st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.62rem;color:#1a3320;line-height:1.8;">// KEY NOT STORED<br/>// SESSION ONLY<br/>// REAL-TIME PROCESSING</p>', unsafe_allow_html=True)
-
+ 
     st.markdown('<h1 class="main-title">QUESTION<span class="accent">LENS</span></h1>', unsafe_allow_html=True)
     st.markdown('<p class="main-subtitle">// UPLOAD PAPERS → DETECT PATTERNS → DOMINATE EXAMS</p>', unsafe_allow_html=True)
-
+ 
     uploaded_files = st.file_uploader(
         "UPLOAD QUESTION PAPERS [ PDF / PNG / JPG ]",
         type=["pdf", "png", "jpg", "jpeg"],
         accept_multiple_files=True
     )
-
+ 
     if uploaded_files:
         names = ", ".join([f.name for f in uploaded_files])
         st.markdown(f'<p class="upload-hint">▶ {len(uploaded_files)} FILE(S) LOADED — {names}</p>', unsafe_allow_html=True)
-
+ 
     col1, col2 = st.columns([3, 1])
     with col1:
         analyze_btn = st.button("🔍 ANALYZE QUESTIONS", disabled=not (uploaded_files and api_key))
     with col2:
         if not api_key:
             st.markdown('<p style="font-family:\'Share Tech Mono\',monospace;font-size:0.65rem;color:#ff4400;padding-top:0.6rem;">! KEY_REQUIRED</p>', unsafe_allow_html=True)
-
+ 
     if analyze_btn and uploaded_files and api_key:
         try:
             progress = st.empty()
             progress.markdown('<p class="analyzing-text">▶ EXTRACTING_QUESTIONS... SCANNING FILES...</p>', unsafe_allow_html=True)
-
+ 
             all_extracted_text = ""
             for file in uploaded_files:
                 file_bytes = file.read()
@@ -501,23 +504,23 @@ def main():
                     mime = "image/jpeg" if fname.endswith((".jpg", ".jpeg")) else "image/png"
                     text = extract_text_from_image(file_bytes, mime, api_key)
                 all_extracted_text += f"\n\n=== FILE: {file.name} ===\n{text}"
-
+ 
             progress.markdown('<p class="analyzing-text">▶ ANALYZING_PATTERNS... DETECTING REPEATS...</p>', unsafe_allow_html=True)
             result = analyze_questions(all_extracted_text, api_key)
             progress.empty()
             st.session_state["result"] = result
             st.session_state["subject_name_saved"] = subject_name
-
+ 
         except json.JSONDecodeError:
             st.error("Could not parse AI response. Please try again.")
         except Exception as e:
             st.error(f"Error: {str(e)}")
-
+ 
     if "result" in st.session_state:
         data = st.session_state["result"]
         subj = st.session_state.get("subject_name_saved", "")
         summary = data.get("summary", {})
-
+ 
         st.markdown("---")
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -528,7 +531,7 @@ def main():
             st.markdown(f'<div class="stat-card"><div class="stat-number">{summary.get("repeated_questions",0)}</div><div class="stat-label">Repeated</div></div>', unsafe_allow_html=True)
         with c4:
             st.markdown(f'<div class="stat-card"><div class="stat-number">{len(summary.get("topics_found",[]))}</div><div class="stat-label">Topics Found</div></div>', unsafe_allow_html=True)
-
+ 
         st.markdown('<div class="section-title">// MOST REPEATED QUESTIONS</div>', unsafe_allow_html=True)
         for i, q in enumerate(data.get("most_repeated", []), 1):
             years_str = " ".join([f'<span class="badge badge-year">{y}</span>' for y in q.get("years", [])])
@@ -542,7 +545,7 @@ def main():
                     {years_str}
                 </div>
             </div>""", unsafe_allow_html=True)
-
+ 
         st.markdown('<div class="section-title">// ALL QUESTIONS BY TOPIC</div>', unsafe_allow_html=True)
         for topic_data in data.get("topics", []):
             questions = topic_data.get("questions", [])
@@ -555,7 +558,7 @@ def main():
                     <div class="question-text">{q.get("question","")}</div>
                     <div>{priority_badge(priority)}<span class="badge badge-count">× {q.get("repeat_count",1)}</span>{years_str}</div>
                 </div>""", unsafe_allow_html=True)
-
+ 
         st.markdown("---")
         st.markdown('<div class="section-title">// EXPORT REPORT</div>', unsafe_allow_html=True)
         pdf_bytes = generate_pdf_report(data, subj)
@@ -566,7 +569,7 @@ def main():
             file_name=filename,
             mime="application/pdf"
         )
-
-
+ 
+ 
 if __name__ == "__main__":
     main()

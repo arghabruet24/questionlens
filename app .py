@@ -309,7 +309,7 @@ def extract_text_from_image(file_bytes, mime_type, api_key):
     try:
         return call_openrouter(
             api_key,
-            "meta-llama/llama-4-maverick:free",
+            "openrouter/free",
             [{
                 "role": "user",
                 "content": [
@@ -321,7 +321,7 @@ def extract_text_from_image(file_bytes, mime_type, api_key):
     except Exception:
         return call_openrouter(
             api_key,
-            "deepseek/deepseek-chat-v3-0324:free",
+            "openrouter/free",
             [{
                 "role": "user",
                 "content": [
@@ -335,7 +335,7 @@ def extract_text_from_image(file_bytes, mime_type, api_key):
 def analyze_questions(all_text, api_key):
     raw = call_openrouter(
         api_key,
-        "deepseek/deepseek-chat-v3-0324:free",
+        "openrouter/free",
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Here are the exam questions to analyze:\n\n{all_text}"}
